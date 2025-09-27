@@ -1,0 +1,627 @@
+{% extends 'base.html' %}
+{% load mathfilters %}
+{% load static %}
+
+{% block title %}Analytics - Tableau de Bord Scraping LeFaso.net{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        height: 100%;
+    }
+    
+    .word-cloud {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 2rem;
+        color: white;
+        min-height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .sentiment-card {
+        border-left: 4px solid;
+        transition: transform 0.3s ease;
+    }
+    
+    .sentiment-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .positive { border-left-color: #10b981; }
+    .negative { border-left-color: #ef4444; }
+    .neutral { border-left-color: #6b7280; }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-item {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .article-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .article-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .engagement-meter {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .engagement-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- En-tête du tableau de bord -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Tableau de Bord Analytics des commentaires
+                </h1>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary">
+                        <i class="fas fa-download me-2"></i>Exporter
+                    </button>
+                    <button class="btn btn-primary" id="refresh-btn">
+                        <i class="fas fa-sync-alt me-2"></i>Actualiser
+                    </button>
+                </div>
+            </div>
+            <p class="text-muted">Analyse complète des données scrapées et tendances</p>
+        </div>
+    </div>
+
+    <!-- Statistiques Globales -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card positive">
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_articles }}</div>
+                    <div class="stat-label">Articles Scrapés</div>
+                    <small class="text-muted">Total analysés</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card neutral">
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_commentaires }}</div>
+                    <div class="stat-label">Commentaires</div>
+                    <small class="text-muted">Interventions totales</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card positive">
+                <div class="stat-item">
+                    <div class="stat-number">{{ auteurs_uniques }}</div>
+                    <div class="stat-label">Auteurs Uniques</div>
+                    <small class="text-muted">Communauté active</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card neutral">
+                <div class="stat-item">
+                    <div class="stat-number">{{ taux_engagement|floatformat:1 }}%</div>
+                    <div class="stat-label">Taux d'Engagement</div>
+                    <small class="text-muted">Moyenne par article</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analyse des Sentiments -->
+    <div class="row mb-4">
+        <div class="col-lg-4 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-smile me-2"></i>Analyse des Sentiments
+                </h5>
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <div class="positive sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-success">{{ sentiment_positif|floatformat:1 }}%</div>
+                            <small>Positif</small>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="neutral sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-secondary">{{ sentiment_neutre|floatformat:1 }}%</div>
+                            <small>Neutre</small>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="negative sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-danger">{{ sentiment_negatif|floatformat:1 }}%</div>
+                            <small>Négatif</small>
+                        </div>
+                    </div>
+                </div>
+                <canvas id="sentimentChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Nuage de Mots -->
+        <div class="col-lg-8 mb-4">
+            <div class="word-cloud">
+                <div class="text-center">
+                    <h5 class="mb-3">Nuage de Mots des Commentaires</h5>
+                    <div id="wordcloud" style="width: 100%; height: 250px;">
+                        <!-- Le nuage de mots sera généré par JavaScript -->
+                        <div class="text-muted">Chargement du nuage de mots...</div>
+                    </div>
+                    <small class="mt-2 d-block">Mots les plus fréquents dans les commentaires</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des Articles avec Analytics -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-newspaper me-2"></i>Articles Analysés
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="articles-table">
+                            <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Date</th>
+                                    <th>Commentaires</th>
+                                    <th>Engagement</th>
+                                    <th>Sentiment</th>
+                                    <th>Mots Clés</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for article in articles %}
+                                <tr class="article-card" onclick="showArticleDetails({{ article.id }})">
+                                    <td>
+                                        <strong>{{ article.titre|truncatewords:8 }}</strong>
+                                        <br>
+                                        <small class="text-muted">ID: {{ article.article_id }}</small>
+                                    </td>
+                                    <td>{{ article.date_publication|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">
+                                            {{ article.nombre_commentaires }} comm.
+                                        </span>
+                                        <span class="badge bg-secondary">
+                                            {{ article.nombre_reponses }} rép.
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="engagement-meter">
+                                            <div class="engagement-fill" 
+                                                 style="width: {{ article.taux_engagement }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ article.taux_engagement|floatformat:1 }}%</small>
+                                    </td>
+                                    <td>
+                                        {% if article.sentiment_moyen > 0.6 %}
+                                        <span class="badge bg-success">Positif</span>
+                                        {% elif article.sentiment_moyen < 0.4 %}
+                                        <span class="badge bg-danger">Négatif</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Neutre</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for mot in article.mots_cles|slice:":3" %}
+                                            <span class="badge bg-light text-dark">{{ mot }}</span>
+                                            {% endfor %}
+                                            {% if article.mots_cles|length > 3 %}
+                                            <span class="badge bg-light text-dark">+{{ article.mots_cles|length|sub:3 }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="event.stopPropagation(); analyzeArticle({{ article.id }})">
+                                                <i class="fas fa-chart-line"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info"
+                                                    onclick="event.stopPropagation(); showWordCloud({{ article.id }})">
+                                                <i class="fas fa-cloud"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success"
+                                                    onclick="event.stopPropagation(); exportArticle({{ article.id }})">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphiques supplémentaires -->
+    <div class="row mt-4">
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-calendar me-2"></i>Activité par Date
+                </h5>
+                <canvas id="activityChart" height="250"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-users me-2"></i>Top Auteurs
+                </h5>
+                <canvas id="authorsChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour les détails de l'article -->
+<div class="modal fade" id="articleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Détails de l'Article</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="articleModalBody">
+                <!-- Contenu chargé dynamiquement -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- WordCloud2 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
+<script>
+// Données pour les graphiques (à remplacer par les données réelles)
+const analyticsData = {
+    sentiments: {
+        positif: {{ sentiment_positif|default:0 }},
+        neutre: {{ sentiment_neutre|default:0 }},
+        negatif: {{ sentiment_negatif|default:0 }}
+    },
+    activite: {{ activite_par_date|safe }},
+    auteurs: {{ top_auteurs|safe }},
+    motsFrequents: {{ mots_frequents|safe }}
+};
+
+// Initialisation des graphiques
+document.addEventListener('DOMContentLoaded', function() {
+    // Graphique des sentiments
+    const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+    new Chart(sentimentCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positif', 'Neutre', 'Négatif'],
+            datasets: [{
+                data: [analyticsData.sentiments.positif, analyticsData.sentiments.neutre, analyticsData.sentiments.negatif],
+                backgroundColor: ['#10b981', '#6b7280', '#ef4444']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Graphique d'activité
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: analyticsData.activite.labels,
+            datasets: [{
+                label: 'Commentaires par jour',
+                data: analyticsData.activite.data,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                fill: true
+            }]
+        }
+    });
+
+    // Graphique des auteurs
+    const authorsCtx = document.getElementById('authorsChart').getContext('2d');
+    new Chart(authorsCtx, {
+        type: 'bar',
+        data: {
+            labels: analyticsData.auteurs.labels,
+            datasets: [{
+                label: 'Nombre de commentaires',
+                data: analyticsData.auteurs.data,
+                backgroundColor: '#10b981'
+            }]
+        }
+    });
+
+});
+
+// Créer un tooltip pour le nuage de mots
+function createTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.id = 'wordcloud-tooltip';
+    tooltip.style.cssText = `
+        position: fixed;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 1000;
+        display: none;
+        pointer-events: none;
+    `;
+    document.body.appendChild(tooltip);
+    return tooltip;
+}
+// Fonction dédiée pour le nuage de mots
+function initializeWordCloud() {
+    const wordcloudElement = document.getElementById('wordcloud');
+    
+    if (!wordcloudElement) {
+        console.error('Élément wordcloud non trouvé');
+        return;
+    }
+    
+    // Vérifier et formater les données
+    let wordList = [
+        ['pays', 46], ['france', 39], ['burkina', 35], ['coup', 35], ['bien', 32],
+        ['nest', 31], ['burkinabè', 30], ['peuple', 24], ['falloir', 22], ['détat', 22],
+        ['bon', 21], ['contre', 21], ['gouvernement', 20], ['officier', 18], ['non', 16],
+        ['grand', 16], ['français', 16], ['sahel', 16], ['faso', 15], ['quon', 15],
+        ['militaire', 15], ['politique', 14], ['afrique', 14], ['cas', 13], ['passer', 12],
+        ['jeune', 12], ['problème', 11], ['monde', 11], ['lafriqu', 11], ['défendre', 11],
+        ['entreprise', 11], ['larmée', 11], ['sécurité', 10], ['devenir', 10], ['trop', 10],
+        ['rien', 10], ['aucun', 10], ['temps', 10], ['situation', 10], ['fois', 10],
+        ['terroriste', 9], ['létat', 9], ['dautre', 9], ['souveraineté', 9], ['risque', 9],
+        ['comprendre', 9], ['président', 9], ['detat', 9], ['kenfo', 9], ['transition', 9]
+    ];
+    
+    console.log('Données mots fréquents:', wordList);
+    
+    // S'assurer que les données sont dans le bon format
+    if (!Array.isArray(wordList) || wordList.length === 0) {
+        wordcloudElement.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                <p>Aucune donnée disponible pour le nuage de mots</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Vérifier le format des données
+    const isValidFormat = wordList.every(item => 
+        Array.isArray(item) && item.length === 2 && typeof item[0] === 'string'
+    );
+    
+    if (!isValidFormat) {
+        console.error('Format de données invalide pour WordCloud2');
+        wordcloudElement.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                <p>Format de données invalide</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Vider l'élément avant de dessiner
+    wordcloudElement.innerHTML = '';
+    
+    // Créer un canvas pour WordCloud2
+    const canvas = document.createElement('canvas');
+    canvas.width = wordcloudElement.offsetWidth;
+    canvas.height = 300;
+    canvas.style.width = '100%';
+    canvas.style.height = '300px';
+    wordcloudElement.appendChild(canvas);
+    
+    // Options WordCloud2
+    const options = {
+        list: wordList,
+        gridSize: Math.round(16 * canvas.width / 1024),
+        weightFactor: function(size) {
+            return Math.pow(size, 2.3) * canvas.width / 1024;
+        },
+        fontFamily: 'Inter, Arial, sans-serif',
+        color: function(word, weight) {
+            return weight > 15 ? '#ff6b6b' : 
+                   weight > 10 ? '#4ecdc4' : 
+                   weight > 5 ? '#45b7d1' : 
+                   '#a0a0a0';
+        },
+        rotateRatio: 0.5,
+        rotationSteps: 2,
+        backgroundColor: 'transparent',
+        shrinkToFit: true,
+        minSize: 8,
+        drawOutOfBound: false,
+        hover: function(item, dimension, event) {
+            if (!dimension) return;
+            
+            const tooltip = document.getElementById('wordcloud-tooltip') || createTooltip();
+            tooltip.innerHTML = `<strong>${item[0]}</strong>: ${item[1]} occurrences`;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (event.clientX + 10) + 'px';
+            tooltip.style.top = (event.clientY + 10) + 'px';
+        }
+    };
+    
+    // Dessiner le nuage de mots
+    try {
+        WordCloud(canvas, options);
+        
+        // Ajouter un événement pour cacher le tooltip
+        canvas.addEventListener('mouseout', function() {
+            const tooltip = document.getElementById('wordcloud-tooltip');
+            if (tooltip) tooltip.style.display = 'none';
+        });
+        
+    } catch (error) {
+        console.error('Erreur WordCloud2:', error);
+        wordcloudElement.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                <p>Erreur lors de la génération du nuage de mots</p>
+                <small>${error.message}</small>
+            </div>
+        `;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initializeWordCloud);
+
+
+// Redessiner le nuage de mots lors du redimensionnement
+let resizeTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+        initializeWordCloud();
+    }, 250);
+});
+
+// Fonction pour regénérer le nuage de mots avec de nouvelles données
+function updateWordCloud(newData) {
+    if (newData && Array.isArray(newData)) {
+        analyticsData.motsFrequents = newData;
+        initializeWordCloud();
+    }
+}
+
+// Fonctions d'interaction
+function showArticleDetails(articleId) {
+    // Charger les détails de l'article via AJAX
+    fetch(`/api/articles/${articleId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('articleModalBody').innerHTML = `
+                <h4>${data.titre}</h4>
+                <p><strong>URL:</strong> <a href="${data.url}" target="_blank">${data.url}</a></p>
+                <p><strong>Date:</strong> ${data.date_publication}</p>
+                <p><strong>Catégorie:</strong> ${data.categorie}</p>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6>Statistiques</h6>
+                                <p>Commentaires: ${data.nombre_commentaires}</p>
+                                <p>Réponses: ${data.nombre_reponses}</p>
+                                <p>Engagement: ${data.taux_engagement}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6>Analyse des Sentiments</h6>
+                                <p>Moyenne: ${data.sentiment_moyen}</p>
+                                <p>Tendance: ${data.tendance_sentiment}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            new bootstrap.Modal(document.getElementById('articleModal')).show();
+        });
+}
+
+function analyzeArticle(articleId) {
+    // Lancer une analyse approfondie
+    fetch(`/api/articles/${articleId}/analyze/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert('Analyse terminée!');
+        location.reload();
+    });
+}
+
+function showWordCloud(articleId) {
+    // Afficher le nuage de mots spécifique à l'article
+    window.open(`/analytics/wordcloud/${articleId}/`, '_blank');
+}
+
+function exportArticle(articleId) {
+    // Exporter les données de l'article
+    window.open(`/api/articles/${articleId}/export/`, '_blank');
+}
+
+// Actualisation des données
+document.getElementById('refresh-btn').addEventListener('click', function() {
+    this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Actualisation...';
+    this.disabled = true;
+    
+    setTimeout(() => {
+        location.reload();
+    }, 2000);
+});
+</script>
+{% endblock %}

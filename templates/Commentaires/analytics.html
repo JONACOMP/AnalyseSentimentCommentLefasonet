@@ -1,0 +1,1055 @@
+{% extends 'base.html' %}
+{% load mathfilters %}
+{% load static %}
+
+{% block title %}Analytics - Tableau de Bord Scraping LeFaso.net{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        height: 100%;
+    }
+    
+    .word-cloud {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 0;
+        color: white;
+        min-height: 300px;
+        display: block;
+        
+    }
+    
+    .sentiment-card {
+        border-left: 4px solid;
+        transition: transform 0.3s ease;
+    }
+    
+    .sentiment-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .positive { border-left-color: #10b981; }
+    .negative { border-left-color: #ef4444; }
+    .neutral { border-left-color: #6b7280; }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-item {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .article-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .article-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .engagement-meter {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .engagement-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+        border-radius: 4px;
+    }
+
+    /* Styles additionnels pour le modal */
+    .article-title {
+        line-height: 1.4;
+        border-left: 4px solid #007bff;
+        padding-left: 15px;
+    }
+
+    .card {
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+    }
+
+    .sentiment-display {
+        padding: 10px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+
+    .badge {
+        font-size: 0.8em;
+    }
+
+    .article-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Animation d'apparition */
+    .modal-content {
+        animation: modalAppear 0.3s ease-out;
+    }
+
+    @keyframes modalAppear {
+        from {
+            opacity: 0;
+            transform: translateY(-50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Styles pour l'analyse */
+    .keywords-cloud {
+        line-height: 2.5;
+    }
+
+    .keyword-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 5px 12px;
+        margin: 4px;
+        border-radius: 20px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease;
+    }
+
+    .keyword-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .progress {
+        border-radius: 10px;
+    }
+
+    .card {
+        transition: transform 0.2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    .sentiment-progress-bars .progress-bar {
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- En-tête du tableau de bord -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Tableau de Bord Analytics des commentaires
+                </h1>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary">
+                        <i class="fas fa-download me-2"></i>Exporter
+                    </button>
+                    <button class="btn btn-primary" id="refresh-btn">
+                        <i class="fas fa-sync-alt me-2"></i>Actualiser
+                    </button>
+                </div>
+            </div>
+            <p class="text-muted">Analyse complète des données scrapées et tendances</p>
+        </div>
+    </div>
+
+    <!-- Statistiques Globales -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card positive">
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_articles }}</div>
+                    <div class="stat-label">Articles Scrapés</div>
+                    <small class="text-muted">Total analysés</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card neutral">
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_commentaires }}</div>
+                    <div class="stat-label">Commentaires</div>
+                    <small class="text-muted">Interventions totales</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card positive">
+                <div class="stat-item">
+                    <div class="stat-number">{{ auteurs_uniques }}</div>
+                    <div class="stat-label">Auteurs Uniques</div>
+                    <small class="text-muted">Communauté active</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="stat-card neutral">
+                <div class="stat-item">
+                    <div class="stat-number">{{ taux_engagement|floatformat:1 }}%</div>
+                    <div class="stat-label">Taux d'Engagement</div>
+                    <small class="text-muted">Moyenne par article</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analyse des Sentiments -->
+    <div class="row mb-4">
+        <div class="col-lg-4 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-smile me-2"></i>Analyse des Sentiments
+                </h5>
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <div class="positive sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-success">{{ sentiment_positif|floatformat:1 }}%</div>
+                            <small>Positif</small>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="neutral sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-secondary">{{ sentiment_neutre|floatformat:1 }}%</div>
+                            <small>Neutre</small>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="negative sentiment-card p-3 mb-2 rounded">
+                            <div class="h3 text-danger">{{ sentiment_negatif|floatformat:1 }}%</div>
+                            <small>Négatif</small>
+                        </div>
+                    </div>
+                </div>
+                <canvas id="sentimentChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Nuage de Mots -->
+        <div class="col-lg-8 mb-4">
+            <div class="word-cloud">
+                <div class="text-center">
+                    <h5 class="mb-3">Nuage de Mots des Commentaires</h5>
+                    <div id="wordcloud" style="width: 100%; height: 300px;">
+                        <!-- Le nuage de mots sera généré par JavaScript -->
+                        <div class="text-muted">Chargement du nuage de mots...</div>
+                    </div>
+                    <small class="mt-2 d-block">Mots les plus fréquents dans les commentaires</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des Articles avec Analytics -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-newspaper me-2"></i>Articles Analysés
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="articles-table">
+                            <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Date</th>
+                                    <th>Commentaires</th>
+                                    <th>Engagement</th>
+                                    <th>Sentiment</th>
+                                    <th>Mots Clés</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for article in articles %}
+                                <tr class="article-card" onclick="showArticleDetails({{ article.id }})">
+                                    <td>
+                                        <strong>{{ article.titre|truncatewords:8 }}</strong>
+                                        <br>
+                                        <small class="text-muted">ID: {{ article.article_id }}</small>
+                                    </td>
+                                    <td>{{ article.date_publication|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">
+                                            {{ article.nombre_commentaires }} comm.
+                                        </span>
+                                        <span class="badge bg-secondary">
+                                            {{ article.nombre_reponses }} rép.
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="engagement-meter">
+                                            <div class="engagement-fill" 
+                                                 style="width: {{ article.taux_engagement }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ article.taux_engagement|floatformat:1 }}%</small>
+                                    </td>
+                                    <td>
+                                        {% if article.sentiment_moyen > 0.6 %}
+                                        <span class="badge bg-success">Positif ->{{article.sentiment_moyen}}</span>
+                                        {% elif article.sentiment_moyen < 0.4 %}
+                                        <span class="badge bg-danger">Négatif ->{{article.sentiment_moyen}}</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Neutre ->{{article.sentiment_moyen}}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for mot in article.mots_cles|slice:":3" %}
+                                            <span class="badge bg-light text-dark">{{ mot }}</span>
+                                            {% endfor %}
+                                            {% if article.mots_cles|length > 3 %}
+                                            <span class="badge bg-light text-dark">+{{ article.mots_cles|length|sub:3 }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="event.stopPropagation(); analyzeArticle({{ article.id }})">
+                                                <i class="fas fa-chart-line"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info"
+                                                    onclick="event.stopPropagation(); showWordCloud({{ article.id }})">
+                                                <i class="fas fa-cloud"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success"
+                                                    onclick="event.stopPropagation(); exportArticle({{ article.id }})">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphiques supplémentaires -->
+    <div class="row mt-4">
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-calendar me-2"></i>Activité par Date
+                </h5>
+                <canvas id="activityChart" height="250"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="mb-3">
+                    <i class="fas fa-users me-2"></i>Top Auteurs
+                </h5>
+                <canvas id="authorsChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour les détails de l'article -->
+<div class="modal fade" id="articleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Détails de l'Article</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="articleModalBody">
+                <!-- Contenu chargé dynamiquement -->
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal d'Analyse -->
+<div class="modal fade" id="analysisModal" tabindex="-1" aria-labelledby="analysisModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title" id="analysisModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Analyse Approfondie
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="analysisModalBody">
+                <!-- Le contenu sera injecté ici par JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- WordCloud2 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
+
+<script>
+    // Configuration des données avec fallbacks
+    const analyticsData = {
+        sentiments: {
+            positif: parseInt('{{ sentiment_positif|default:0 }}') || 0,
+            neutre: parseInt('{{ sentiment_neutre|default:0 }}') || 0,
+            negatif: parseInt('{{ sentiment_negatif|default:0 }}') || 0
+        },
+        activite: {{ activite_par_date|default:"{}"|safe }},
+        auteurs: {{ top_auteurs|default:"{}"|safe }},
+        motsFrequents: JSON.parse('{{ mots_frequents|default:"[]"|safe }}' || '[]')
+    };
+
+    // Exemple d'utilisation
+    console.log('Sentiment positif:', analyticsData.sentiments.positif);
+    console.log('Sentiment neutre:', analyticsData.sentiments.neutre);
+    console.log('Sentiment negatif:', analyticsData.sentiments.negatif);
+
+    console.log('Labels activité:', analyticsData.activite.labels);
+    console.log('Données activité:', analyticsData.activite.data);
+
+    console.log('Labels auteurs:', analyticsData.auteurs.labels);
+    console.log('Données auteurs:', analyticsData.auteurs.data);
+
+    // Créer un tooltip pour le nuage de mots
+    function createTooltip() {
+        const tooltip = document.createElement('div');
+        tooltip.id = 'wordcloud-tooltip';
+        tooltip.style.cssText = `
+            position: fixed;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+            display: none;
+            pointer-events: none;
+        `;
+        document.body.appendChild(tooltip);
+        return tooltip;
+    }
+    // Fonction dédiée pour le nuage de mots
+    function initializeWordCloud() {
+        const wordcloudElement = document.getElementById('wordcloud');
+        
+        if (!wordcloudElement) {
+            console.error('Élément wordcloud non trouvé');
+            return;
+        }
+        
+        // Vérifier et formater les données
+        let wordList = analyticsData.motsFrequents;
+        
+        console.log('Données mots fréquents:', wordList);
+        
+        // S'assurer que les données sont dans le bon format
+        if (!Array.isArray(wordList) || wordList.length === 0) {
+            wordcloudElement.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Aucune donnée disponible pour le nuage de mots</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Vérifier le format des données
+        const isValidFormat = wordList.every(item => 
+            Array.isArray(item) && item.length === 2 && typeof item[0] === 'string'
+        );
+        
+        if (!isValidFormat) {
+            console.error('Format de données invalide pour WordCloud2');
+            wordcloudElement.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Format de données invalide</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Vider l'élément avant de dessiner
+        wordcloudElement.innerHTML = '';
+        
+        // Créer un canvas pour WordCloud2
+        const canvas = document.createElement('canvas');
+        //canvas.width = wordcloudElement.offsetWidth;
+        //canvas.height = 300;
+        //canvas.style.width = '100%';
+        //canvas.style.height = '300px';
+        canvas.width = wordcloudElement.clientWidth;
+        canvas.height = 300;
+        wordcloudElement.appendChild(canvas);
+        
+        // Options WordCloud2
+        const options = {
+            list: wordList,
+            gridSize: Math.round(16 * canvas.width / 1024),
+            weightFactor: function(size) {
+                return Math.pow(size, 2.3) * canvas.width / 1024;
+            },
+            fontFamily: 'Inter, Arial, sans-serif',
+            color: function(word, weight) {
+                return weight > 15 ? '#ff6b6b' : 
+                    weight > 10 ? '#ead03fff' : 
+                    weight > 5 ? '#45b7d1' : 
+                    '#a0a0a0';
+            },
+            rotateRatio: 0.5,
+            rotationSteps: 2,
+            backgroundColor: 'transparent',
+            shrinkToFit: true,
+            minSize: 8,
+            drawOutOfBound: false,
+            hover: function(item, dimension, event) {
+                if (!dimension) return;
+                
+                const tooltip = document.getElementById('wordcloud-tooltip') || createTooltip();
+                tooltip.innerHTML = `<strong>${item[0]}</strong>: ${item[1]} occurrences`;
+                tooltip.style.display = 'block';
+                tooltip.style.left = (event.clientX + 10) + 'px';
+                tooltip.style.top = (event.clientY + 10) + 'px';
+            }
+        };
+        
+        // Dessiner le nuage de mots
+        try {
+            WordCloud(canvas, options);
+            
+            // Ajouter un événement pour cacher le tooltip
+            canvas.addEventListener('mouseout', function() {
+                const tooltip = document.getElementById('wordcloud-tooltip');
+                if (tooltip) tooltip.style.display = 'none';
+            });
+            
+        } catch (error) {
+            console.error('Erreur WordCloud2:', error);
+            wordcloudElement.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Erreur lors de la génération du nuage de mots</p>
+                    <small>${error.message}</small>
+                </div>
+            `;
+        }
+    }
+    document.addEventListener('DOMContentLoaded', initializeWordCloud);
+
+    // Initialisation des graphiques
+    document.addEventListener('DOMContentLoaded', function() {
+        // Graphique des sentiments
+        const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+        new Chart(sentimentCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Positif', 'Neutre', 'Négatif'],
+                datasets: [{
+                    data: [analyticsData.sentiments.positif, analyticsData.sentiments.neutre, analyticsData.sentiments.negatif],
+                    backgroundColor: ['#10b981', '#6b7280', '#ef4444']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        // Graphique d'activité
+        const activityCtx = document.getElementById('activityChart').getContext('2d');
+        new Chart(activityCtx, {
+            type: 'line',
+            data: {
+                labels: analyticsData.activite.labels,
+                datasets: [{
+                    label: 'Commentaires par jour',
+                    data: analyticsData.activite.data,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true
+                }]
+            }
+        });
+
+        // Graphique des auteurs
+        const authorsCtx = document.getElementById('authorsChart').getContext('2d');
+        new Chart(authorsCtx, {
+            type: 'bar',
+            data: {
+                labels: analyticsData.auteurs.labels,
+                datasets: [{
+                    label: 'Nombre de commentaires',
+                    data: analyticsData.auteurs.data,
+                    backgroundColor: '#10b981'
+                }]
+            }
+        });
+
+    });
+
+    // Redessiner le nuage de mots lors du redimensionnement
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            initializeWordCloud();
+        }, 250);
+    });
+
+    // Fonction pour regénérer le nuage de mots avec de nouvelles données
+    function updateWordCloud(newData) {
+        if (newData && Array.isArray(newData)) {
+            motsFrequents = newData;
+            initializeWordCloud();
+        }
+    }
+
+    // Fonctions d'interaction
+    function showArticleDetails(articleId) {
+        // Afficher un indicateur de chargement
+        document.getElementById('articleModalBody').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <p class="mt-2 text-muted">Chargement des détails de l'article...</p>
+            </div>
+        `;
+        
+        // Ouvrir le modal immédiatement
+        const modal = new bootstrap.Modal(document.getElementById('articleModal'));
+        modal.show();
+
+        // Charger les détails de l'article via AJAX
+        fetch(`/api/articles/${articleId}/`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('articleModalBody').innerHTML = `
+                    <div class="article-header mb-4">
+                        <h4 class="article-title text-primary mb-2">${data.titre}</h4>
+                        <div class="article-meta text-muted small">
+                            <span class="badge bg-secondary me-2">${data.categorie}</span>
+                            <i class="far fa-calendar me-1"></i>${data.date_publication}
+                        </div>
+                    </div>
+
+                    <div class="article-url mb-4">
+                        <a href="${data.url}" target="_blank" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-external-link-alt me-2"></i>Voir l'article original
+                        </a>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Statistiques</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Commentaires:</span>
+                                        <span class="badge bg-primary">${data.nombre_commentaires}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Réponses:</span>
+                                        <span class="badge bg-info">${data.nombre_reponses}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Engagement:</span>
+                                        <span class="badge bg-success">${data.taux_engagement}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0"><i class="fas fa-heart me-2"></i>Analyse des Sentiments</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="sentiment-display text-center mb-3">
+                                        <div class="sentiment-value display-6 fw-bold ${getSentimentColor(data.sentiment_moyen)}">
+                                            ${data.sentiment_moyen}
+                                        </div>
+                                        <small class="text-muted">Score moyen</small>
+                                    </div>
+                                    <div class="tendance-indicator">
+                                        <span class="badge ${getTendanceBadge(data.tendance_sentiment)}">
+                                            <i class="fas ${getTendanceIcon(data.tendance_sentiment)} me-1"></i>
+                                            ${data.tendance_sentiment}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${data.resume ? `
+                    <div class="card mt-3 border-0 shadow-sm">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-file-alt me-2"></i>Résumé</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">${data.resume}</p>
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+            })
+            .catch(error => {
+                document.getElementById('articleModalBody').innerHTML = `
+                    <div class="alert alert-danger text-center">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <h5>Erreur de chargement</h5>
+                        <p class="mb-0">Impossible de charger les détails de l'article.</p>
+                    </div>
+                `;
+            });
+    }
+
+    // Fonctions utilitaires pour le style
+    function getSentimentColor(score) {
+        if (score >= 7) return 'text-success';
+        if (score >= 4) return 'text-warning';
+        return 'text-danger';
+    }
+
+    function getTendanceBadge(tendance) {
+        switch(tendance.toLowerCase()) {
+            case 'positive': return 'bg-success';
+            case 'negative': return 'bg-danger';
+            case 'neutre': return 'bg-secondary';
+            default: return 'bg-info';
+        }
+    }
+
+    function getTendanceIcon(tendance) {
+        switch(tendance.toLowerCase()) {
+            case 'positive': return 'fa-arrow-up';
+            case 'negative': return 'fa-arrow-down';
+            case 'neutre': return 'fa-minus';
+            default: return 'fa-question';
+        }
+    }
+
+    //function analyzeArticle(articleId) {
+        // Lancer une analyse approfondie
+        //fetch(`/api/articles/${articleId}/analyze/`, {
+          //  method: 'POST',
+            //headers: {
+              //  'X-CSRFToken': '{{ csrf_token }}'
+            //}
+        //})
+       // .then(response => response.json())
+        //.then(data => {
+          //  alert('Analyse terminée!');
+            //location.reload();
+        //});
+    //}
+
+    function analyzeArticle(articleId) {
+        // Afficher un modal de chargement
+        const analysisModal = new bootstrap.Modal(document.getElementById('analysisModal'));
+        const analysisBody = document.getElementById('analysisModalBody');
+        
+        analysisBody.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Analyse en cours...</span>
+                </div>
+                <h5 class="text-primary">Analyse en cours</h5>
+                <p class="text-muted">L'analyse approfondie de l'article est en cours de traitement...</p>
+                <div class="progress mt-3" style="height: 6px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                </div>
+            </div>
+        `;
+        
+        analysisModal.show();
+
+        // Lancer l'analyse approfondie
+        fetch(`/api/articles/${articleId}/analyze/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                displayAnalysisResults(data);
+            } else {
+                throw new Error(data.message || 'Erreur lors de l\'analyse');
+            }
+        })
+        .catch(error => {
+            analysisBody.innerHTML = `
+                <div class="alert alert-danger text-center">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                    <h5>Erreur d'analyse</h5>
+                    <p class="mb-3">${error.message}</p>
+                    <button class="btn btn-outline-danger" onclick="analyzeArticle(${articleId})">
+                        <i class="fas fa-redo me-2"></i>Réessayer
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    function displayAnalysisResults(data) {
+        const analysisBody = document.getElementById('analysisModalBody');
+        
+        analysisBody.innerHTML = `
+            <div class="analysis-header text-center mb-4">
+                <div class="success-icon mb-3">
+                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h4 class="text-success mb-2">Analyse Terminée !</h4>
+                <p class="text-muted">Article ID: ${data.article_id}</p>
+                <small class="text-muted">Analyse effectuée le: ${new Date(data.timestamp).toLocaleString()}</small>
+            </div>
+
+            <div class="row g-4">
+                <!-- Analyse des Sentiments -->
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Analyse des Sentiments</h6>
+                        </div>
+                        <div class="card-body">
+                            ${renderSentimentAnalysis(data.sentiments)}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistiques Générales -->
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Statistiques</h6>
+                        </div>
+                        <div class="card-body">
+                            ${renderStatistics(data.stats)}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mots Clés -->
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0"><i class="fas fa-key me-2"></i>Mots Clés Principaux</h6>
+                        </div>
+                        <div class="card-body">
+                            ${renderKeywords(data.mots_cles)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-primary me-2" onclick="location.reload()">
+                    <i class="fas fa-sync me-2"></i>Actualiser la page
+                </button>
+                <button class="btn btn-outline-secondary" onclick="closeAnalysisModal()">
+                    <i class="fas fa-times me-2"></i>Fermer
+                </button>
+            </div>
+        `;
+    }
+
+    function renderSentimentAnalysis(sentiments) {
+        if (!sentiments) return '<p class="text-muted">Aucune donnée de sentiment disponible</p>';
+        
+        const total = sentiments.positif + sentiments.neutre + sentiments.negatif;
+        const positifPercent = total > 0 ? (sentiments.positif / total * 100).toFixed(1) : 0;
+        const neutrePercent = total > 0 ? (sentiments.neutre / total * 100).toFixed(1) : 0;
+        const negatifPercent = total > 0 ? (sentiments.negatif / total * 100).toFixed(1) : 0;
+
+        return `
+            <div class="sentiment-progress-bars">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Positif</span>
+                    <span class="fw-bold text-success">${sentiments.positif} (${positifPercent}%)</span>
+                </div>
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar bg-success" style="width: ${positifPercent}%"></div>
+                </div>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Neutre</span>
+                    <span class="fw-bold text-warning">${sentiments.neutre} (${neutrePercent}%)</span>
+                </div>
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar bg-warning" style="width: ${neutrePercent}%"></div>
+                </div>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Négatif</span>
+                    <span class="fw-bold text-danger">${sentiments.negatif} (${negatifPercent}%)</span>
+                </div>
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar bg-danger" style="width: ${negatifPercent}%"></div>
+                </div>
+            </div>
+
+            <div class="sentiment-summary text-center mt-3 p-3 bg-light rounded">
+                <h6 class="mb-2">Résumé des Sentiments</h6>
+                <div class="d-flex justify-content-around">
+                    <div>
+                        <span class="badge bg-success">${positifPercent}% Positif</span>
+                    </div>
+                    <div>
+                        <span class="badge bg-warning">${neutrePercent}% Neutre</span>
+                    </div>
+                    <div>
+                        <span class="badge bg-danger">${negatifPercent}% Négatif</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderStatistics(stats) {
+        if (!stats) return '<p class="text-muted">Aucune statistique disponible</p>';
+        
+        return `
+            <div class="stats-grid">
+                ${stats.nombre_commentaires ? `
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
+                    <span><i class="fas fa-comments text-primary me-2"></i>Commentaires</span>
+                    <span class="badge bg-primary">${stats.nombre_commentaires}</span>
+                </div>
+                ` : ''}
+                
+                ${stats.nombre_reponses ? `
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
+                    <span><i class="fas fa-reply text-info me-2"></i>Réponses</span>
+                    <span class="badge bg-info">${stats.nombre_reponses}</span>
+                </div>
+                ` : ''}
+                
+                ${stats.taux_engagement ? `
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
+                    <span><i class="fas fa-chart-line text-success me-2"></i>Engagement</span>
+                    <span class="badge bg-success">${stats.taux_engagement}%</span>
+                </div>
+                ` : ''}
+                
+                ${stats.score_impact ? `
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
+                    <span><i class="fas fa-bullseye text-warning me-2"></i>Score d'Impact</span>
+                    <span class="badge bg-warning">${stats.score_impact}</span>
+                </div>
+                ` : ''}
+                
+                ${stats.mots_total ? `
+                <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                    <span><i class="fas fa-font text-secondary me-2"></i>Mots Total</span>
+                    <span class="badge bg-secondary">${stats.mots_total}</span>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    function renderKeywords(motsCles) {
+        if (!motsCles || !Array.isArray(motsCles) || motsCles.length === 0) {
+            return '<p class="text-muted">Aucun mot-clé identifié</p>';
+        }
+
+        const keywordsHtml = motsCles.map((mot, index) => {
+            const size = 12 + (index < 5 ? (5 - index) * 2 : 1); // Taille décroissante
+            return `<span class="keyword-badge" style="font-size: ${size}px">${mot}</span>`;
+        }).join('');
+
+        return `
+            <div class="keywords-cloud text-center">
+                ${keywordsHtml}
+            </div>
+            <div class="text-center mt-3">
+                <small class="text-muted">${motsCles.length} mots-clés identifiés</small>
+            </div>
+        `;
+    }
+
+    function closeAnalysisModal() {
+        const analysisModal = bootstrap.Modal.getInstance(document.getElementById('analysisModal'));
+        analysisModal.hide();
+    }
+
+    function showWordCloud(articleId) {
+        // Afficher le nuage de mots spécifique à l'article
+        window.open(`/api/wordcloud/${articleId}/`, '_blank');
+    }
+
+    function exportArticle(articleId) {
+        // Exporter les données de l'article
+        window.open(`/api/articles/${articleId}/export/`, '_blank');
+    }
+
+    // Actualisation des données
+    document.getElementById('refresh-btn').addEventListener('click', function() {
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Actualisation...';
+        this.disabled = true;
+        
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+    });
+</script>
+{% endblock %}

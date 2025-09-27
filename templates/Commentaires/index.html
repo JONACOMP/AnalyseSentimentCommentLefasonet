@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% load mathfilters %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Cette page scrape les commentaires d'articles de LeFaso.net et les structure dans un DataFrame</h1>
+    
+    <!-- Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h4>{{ total_articles }}</h4>
+                    <p>Articles scrapés</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h4>{{ total_commentaires }}</h4>
+                    <p>Commentaires</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h4>{{ urls_enregistrees|length }}</h4>
+                    <p>URLs enregistrées</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulaire d'ajout d'URL -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Ajouter une URL à scraper</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'Commentaires:home' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="ajouter_url">
+                <div class="input-group">
+                    <input type="url" name="url" class="form-control" 
+                           placeholder="https://lefaso.net/spip.php?article12345" required>
+                    <button type="submit" class="btn btn-primary">Ajouter</button>
+                </div>
+                <small class="form-text text-muted">
+                    Seules les URLs d'articles LeFaso.net sont acceptées
+                </small>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des URLs enregistrées -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5>Mes URLs à scraper</h5>
+        </div>
+
+        <div class="card-body">
+            {% if urls_enregistrees %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="select-all"></th>
+                        <th>URL</th>
+                        <th>Statut</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for url in urls_enregistrees %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="urls_selectionnees" 
+                                value="{{ url.url }}" class="url-checkbox"
+                                form="scraping-form"
+                                {% if url.statut != 'attente' %}disabled{% endif %}>
+                        </td>
+                        <td>
+                            <a href="{{ url.url }}" target="_blank">{{ url.url }}</a>
+                            <br><small>ID: {{ url.article_id }}</small>
+                        </td>
+                        <td>
+                            <span class="bg-warning badge badge-{{ url.get_badge_class }}">
+                                {{ url.get_statut_display }}
+                            </span>
+                        </td>
+                        <td>{{ url.date_ajout|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <!-- Formulaire individuel pour suppression -->
+                            <form method="post" action="{% url 'Commentaires:home' %}" style="display:inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="supprimer_url">
+                                <input type="hidden" name="url_id" value="{{ url.id }}">
+                                <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Formulaire global pour le scraping -->
+            <form method="post" action="{% url 'Commentaires:home' %}" id="scraping-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="scraper_urls">
+
+                <button type="submit" class="btn btn-success" id="btn-scraper" disabled>
+                    Lancer le scraping sélectionné
+                </button>
+            </form>
+
+            {% else %}
+            <p class="text-muted">Aucune URL enregistrée. Ajoutez une URL ci-dessus.</p>
+            {% endif %}
+        </div>
+    </div>
+
+
+
+    <!-- Historique des scrapings -->
+    <div class="card">
+        <div class="card-header">
+            <h5>Historique des scrapings</h5>
+        </div>
+        <div class="card-body">
+            {% if historiques %}
+            <div class="list-group">
+                {% for hist in historiques %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6>{{ hist.date_lancement|date:"d/m/Y H:i" }}</h6>
+                            <small>{{ hist.urls_selectionnees|length|div:45 }} URL(s)</small>
+                        </div>
+                        <span class="badge badge-{{ hist.get_badge_class }}">
+                            {{ hist.get_statut_display }}
+                        </span>
+                    </div>
+                    {% if hist.statut == 'cours' %}
+                    <div class="progress mt-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             style="width: {{ hist.progression }}%">
+                            {{ hist.progression }}%
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">Aucun historique de scraping.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript pour la gestion des checkboxes -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sélection/désélection globale
+    document.getElementById('select-all').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.url-checkbox:not(:disabled)');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateScrapingButton();
+    });
+
+    // Mise à jour du bouton de scraping
+    function updateScrapingButton() {
+        const selectedCount = document.querySelectorAll('.url-checkbox:checked').length;
+        const btn = document.getElementById('btn-scraper');
+        btn.disabled = selectedCount === 0;
+        btn.textContent = selectedCount > 0 ? 
+            `Scraper ${selectedCount} URL(s) sélectionnée(s)` : 
+            'Lancer le scraping sélectionné';
+    }
+
+    document.querySelectorAll('.url-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateScrapingButton);
+    });
+});
+</script>
+{% endblock %}

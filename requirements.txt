@@ -1,0 +1,14 @@
+# Analytics et ML
+transformers>=4.30.0
+torch>=2.0.0
+pandas>=1.5.0
+numpy>=1.21.0
+scikit-learn>=1.0.0
+
+# Text processing
+nltk>=3.7
+spacy>=3.5.0
+# python -m spacy download fr_core_news_sm
+
+# Data visualization
+plotly>=5.10.0
