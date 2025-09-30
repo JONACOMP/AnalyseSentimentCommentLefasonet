@@ -30,9 +30,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     TFAutoModelForSequenceClassification,
-    CamembertTokenizer,
-    CamembertForSequenceClassification,
-    pipeline,
+    pipeline
 )
 
 import torch
@@ -400,21 +398,20 @@ class AnalyticsView(View):
     def initialize_sentiment_analyzer(self):
         """Initialise le modèle BERT pour l'analyse des sentiments"""
         try:
-            # Modèle Camembert entraîné sur Allociné (PyTorch)
+            # Tentative PyTorch (camembert-base-allocine)
             model_name = "tblard/camembert-base-allocine"
-            tokenizer = CamembertTokenizer.from_pretrained(model_name)
-            model = CamembertForSequenceClassification.from_pretrained(model_name)
-
+            tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+            model = AutoModelForSequenceClassification.from_pretrained(model_name)
             self.sentiment_analyzer = pipeline(
                 "sentiment-analysis",
                 model=model,
                 tokenizer=tokenizer,
-                framework="pt"  # Forcer PyTorch
+                framework="pt"
             )
-            print("Modèle Camembert-Allociné initialisé en PyTorch")
+            print("Modèle BERT (PyTorch - camembert-base-allocine) initialisé")
 
         except Exception as e1:
-            print(f"Erreur Camembert-Allociné: {e1}")
+            print(f"Erreur PyTorch, tentative TensorFlow : {e1}")
             try:
                 # Fallback TensorFlow (tf-allocine)
                 model_name = "tblard/tf-allocine"

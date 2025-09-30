@@ -476,49 +476,71 @@
         document.body.appendChild(tooltip);
         return tooltip;
     }
-
+    // Fonction dédiée pour le nuage de mots
     function initializeWordCloud() {
         const wordcloudElement = document.getElementById('wordcloud');
-        if (!wordcloudElement) return;
-
-        let wordList = analyticsData.motsFrequents;
-        if (!Array.isArray(wordList) || wordList.length === 0) {
-            wordcloudElement.innerHTML = '<div class="text-muted text-center">Aucune donnée disponible</div>';
+        
+        if (!wordcloudElement) {
+            console.error('Élément wordcloud non trouvé');
             return;
         }
-
-        // Nettoyer l'élément
+        
+        // Vérifier et formater les données
+        let wordList = analyticsData.motsFrequents;
+        
+        console.log('Données mots fréquents:', wordList);
+        
+        // S'assurer que les données sont dans le bon format
+        if (!Array.isArray(wordList) || wordList.length === 0) {
+            wordcloudElement.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Aucune donnée disponible pour le nuage de mots</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Vérifier le format des données
+        const isValidFormat = wordList.every(item => 
+            Array.isArray(item) && item.length === 2 && typeof item[0] === 'string'
+        );
+        
+        if (!isValidFormat) {
+            console.error('Format de données invalide pour WordCloud2');
+            wordcloudElement.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Format de données invalide</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Vider l'élément avant de dessiner
         wordcloudElement.innerHTML = '';
-
-        // Créer un canvas qui remplit le conteneur
+        
+        // Créer un canvas pour WordCloud2
         const canvas = document.createElement('canvas');
         canvas.width = wordcloudElement.clientWidth;
-        canvas.height = wordcloudElement.clientHeight || 300;
+        canvas.height = 400;
         wordcloudElement.appendChild(canvas);
 
-        const maxWeight = Math.max(...wordList.map(w => w[1]));
+        const scaledWordList = wordList.map(([word, freq]) => [word, freq]);
 
         const options = {
-            list: wordList,
-            gridSize: Math.max(4, Math.round(canvas.width / 50)),
-            weightFactor: function(size) {
-                return (size / maxWeight) * (canvas.width / 10); // proportionnel au conteneur
-            },
+            list: scaledWordList,
+            gridSize: Math.max(Math.round(16 * canvas.width / 1024), 4),
+            weightFactor: function(size) { return size * canvas.width / 1024; },
             fontFamily: 'Inter, Arial, sans-serif',
             color: function(word, weight) {
-                const ratio = Math.min(weight / maxWeight, 1);
-                const startColor = [255, 240, 120];  // jaune clair
-                const endColor = [255, 100, 50];     // orange/rouge
-                const r = Math.round(startColor[0] + (endColor[0] - startColor[0]) * ratio);
-                const g = Math.round(startColor[1] + (endColor[1] - startColor[1]) * ratio);
-                const b = Math.round(startColor[2] + (endColor[2] - startColor[2]) * ratio);
-                return `rgb(${r},${g},${b})`;
+                return weight > 15 ? '#ff6b6b' : weight > 10 ? '#ead03fff' : weight > 5 ? '#45b7d1' : '#a0a0a0';
             },
             rotateRatio: 0.5,
             rotationSteps: 2,
             backgroundColor: 'transparent',
             shrinkToFit: true,
-            minSize: 10,
+            minSize: 8,
             drawOutOfBound: false,
             hover: function(item, dimension, event) {
                 if (!dimension) return;
@@ -530,7 +552,6 @@
             }
         };
 
-        // Dessiner le nuage
         try {
             WordCloud(canvas, options);
             canvas.addEventListener('mouseout', function() {
@@ -539,19 +560,14 @@
             });
         } catch (error) {
             console.error('Erreur WordCloud2:', error);
-            wordcloudElement.innerHTML = `<div class="text-muted text-center">Erreur nuage de mots</div>`;
+            wordcloudElement.innerHTML = `<div class="text-center text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                <p>Erreur lors de la génération du nuage de mots</p>
+                <small>${error.message}</small>
+            </div>`;
         }
-
-        // Redessiner lors du redimensionnement de la fenêtre
-        window.addEventListener('resize', () => {
-            canvas.width = wordcloudElement.clientWidth;
-            canvas.height = wordcloudElement.clientHeight || 300;
-            WordCloud(canvas, options);
-        });
     }
-
     document.addEventListener('DOMContentLoaded', initializeWordCloud);
-
 
     // Initialisation des graphiques
     document.addEventListener('DOMContentLoaded', function() {
