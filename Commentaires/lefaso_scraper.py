@@ -1,7 +1,7 @@
 """
 Scraper de commentaires pour LeFaso.net
-Auteur: Assistant AI
-Date: 2024
+Auteur: JONACOMP
+Date: 2025
 Description: Ce script scrape les commentaires d'articles de LeFaso.net et les structure dans un DataFrame
 """
 
