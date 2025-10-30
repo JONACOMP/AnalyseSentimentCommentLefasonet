@@ -1,3 +1,11 @@
+"""
+Scraper de commentaires pour LeFaso.net
+Auteur: JONACOMP
+Date: 2025
+Description: Ce script scrape les commentaires d'articles de LeFaso.net et les structure dans un DataFrame
+"""
+
+
 import pandas as pd
 from lefaso_scraper import LefasoCommentScraper
 from datetime import datetime
